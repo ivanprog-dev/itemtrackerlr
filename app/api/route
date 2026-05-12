@@ -1,0 +1,83 @@
+export const runtime = 'edge'
+export const maxDuration = 30
+
+// In-memory snapshot for serverless (resets on cold start, but KV is optional)
+// For persistence across requests on Vercel, we use a simple external KV via fetch
+// Users can optionally set ANTHROPIC_API_KEY env var
+
+async function fetchItems(apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{
+        role: 'user',
+        content: `Fetch https://lostrelics.io/items and extract ONLY items showing "X of Y remaining" (skip "circulating" and "Unlimited supply" items). Return a JSON array only, no markdown, no explanation. Each object: {"name":"Item Name","remaining":X,"total":Y,"rarity":"Transcendent|Mythical|Legendary|Epic|Rare|Uncommon|Special","slug":"slug"}`
+      }]
+    })
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Anthropic API error ${res.status}: ${err}`)
+  }
+
+  const data = await res.json()
+  const text = data.content
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('')
+  const clean = text.replace(/```json|```/g, '').trim()
+  return JSON.parse(clean)
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json()
+    const apiKey = body.apiKey || process.env.ANTHROPIC_API_KEY
+
+    if (!apiKey) {
+      return Response.json({ error: 'No API key provided' }, { status: 400 })
+    }
+
+    const snapshot = body.snapshot || {}
+    const items = await fetchItems(apiKey)
+
+    const drops = []
+    const newSnapshot = {}
+
+    for (const item of items) {
+      const key = item.slug
+      newSnapshot[key] = item.remaining
+      const prev = snapshot[key]
+      if (prev !== undefined && typeof prev === 'number' && item.remaining < prev) {
+        drops.push({
+          name: item.name,
+          rarity: item.rarity,
+          slug: item.slug,
+          remaining: item.remaining,
+          total: item.total,
+          prev,
+          diff: prev - item.remaining,
+          timestamp: new Date().toISOString(),
+        })
+      }
+    }
+
+    return Response.json({
+      items,
+      snapshot: newSnapshot,
+      drops,
+      checkedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
+}
