@@ -1,5 +1,3 @@
-*, *::before, *::after { box-sizing: border-box; }
-
 .page { display: flex; height: 100vh; overflow: hidden; }
 
 .sidebar {
