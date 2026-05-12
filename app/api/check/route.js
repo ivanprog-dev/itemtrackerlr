@@ -1,71 +1,144 @@
-export const runtime = 'edge'
-export const maxDuration = 30
+*, *::before, *::after { box-sizing: border-box; }
 
-export async function GET() {
-  try {
-    // Try allorigins CORS proxy which returns fully rendered HTML
-    const url = encodeURIComponent('https://lostrelics.io/items')
-    const res = await fetch(`https://api.allorigins.win/get?url=${url}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    })
+.page { display: flex; height: 100vh; overflow: hidden; }
 
-    if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`)
-    const json = await res.json()
-    const html = json.contents
-
-    if (!html) throw new Error('Proxy returned empty content')
-
-    const items = parseItems(html)
-
-    return Response.json({
-      items,
-      fetchedAt: new Date().toISOString(),
-      debug: `Parsed ${items.length} items from ${html.length} chars`
-    })
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 })
-  }
+.sidebar {
+  width: 250px; flex-shrink: 0;
+  background: #141414; border-right: 1px solid #1f1f1f;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
 }
 
-function parseItems(html) {
-  const items = []
-  const rarities = ['Transcendent','Mythical','Legendary','Epic','Rare','Uncommon','Common','Special','Titanforged']
-  const seen = new Set()
-
-  // Split on item links
-  const parts = html.split(/href="https?:\/\/lostrelics\.io\/items\//)
-
-  for (let i = 1; i < parts.length; i++) {
-    const chunk = parts[i]
-
-    // Slug
-    const slugMatch = chunk.match(/^([a-zA-Z0-9_-]+)["']/)
-    if (!slugMatch) continue
-    const slug = slugMatch[1].toLowerCase()
-    if (seen.has(slug)) continue
-
-    // Only X of Y remaining
-    const supplyMatch = chunk.match(/(\d[\d,]*)\s+of\s+(\d[\d,]*)\s+remaining/)
-    if (!supplyMatch) continue
-
-    const remaining = parseInt(supplyMatch[1].replace(/,/g, ''))
-    const total = parseInt(supplyMatch[2].replace(/,/g, ''))
-    if (isNaN(remaining) || isNaN(total) || total === 0) continue
-
-    // Name
-    let name = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-    const nameMatch = chunk.match(/^\s*[^>]*>\s*([^<\n]{2,80}?)\s+Image\b/)
-    if (nameMatch) name = nameMatch[1].trim()
-
-    // Rarity
-    let rarity = 'Unknown'
-    for (const r of rarities) {
-      if (chunk.includes(r)) { rarity = r; break }
-    }
-
-    seen.add(slug)
-    items.push({ slug, name, remaining, total, rarity })
-  }
-
-  return items
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  padding: 18px 16px 14px;
+  font-size: 15px; font-weight: 600; color: #f0f0f0;
+  border-bottom: 1px solid #1f1f1f;
 }
+
+.section { padding: 12px 14px; border-bottom: 1px solid #1f1f1f; }
+
+.sectionLabel {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #444; margin-bottom: 8px;
+}
+
+.infoRow { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.infoLbl { font-size: 12px; color: #555; }
+.infoVal { font-size: 12px; color: #888; font-variant-numeric: tabular-nums; }
+
+.input {
+  width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a;
+  border-radius: 6px; padding: 6px 9px; color: #e0e0e0;
+  font-size: 12px; outline: none; font-family: inherit;
+}
+.input:focus { border-color: rgba(232,93,47,0.5); }
+
+.hint { font-size: 11px; color: #444; line-height: 1.5; margin-top: 8px; }
+
+.errorBox {
+  background: rgba(231,76,60,0.08); border: 1px solid rgba(231,76,60,0.25);
+  border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #e74c3c; word-break: break-all;
+}
+
+.debugBox {
+  background: #1a1a1a; border: 1px solid #2a2a2a;
+  border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #555;
+}
+
+.btnFetch {
+  width: 100%; background: #e85d2f; border: none;
+  border-radius: 7px; color: #fff; padding: 10px;
+  font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 8px;
+  font-family: inherit;
+}
+.btnFetch:hover:not(:disabled) { opacity: 0.85; }
+.btnFetch:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btnClear {
+  width: 100%; background: transparent; border: 1px solid #222;
+  border-radius: 6px; color: #444; padding: 7px; font-size: 12px; cursor: pointer;
+  font-family: inherit;
+}
+.btnClear:hover { border-color: #e74c3c; color: #e74c3c; }
+
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-width: 0; }
+
+.tabs {
+  display: flex; border-bottom: 1px solid #1f1f1f;
+  padding: 0 20px; gap: 4px; flex-shrink: 0;
+}
+
+.tab {
+  background: none; border: none; color: #555; cursor: pointer;
+  padding: 14px 12px 12px; font-size: 13px; border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 6px; font-family: inherit;
+  white-space: nowrap;
+}
+.tab:hover { color: #888; }
+.tabActive { color: #f0f0f0 !important; border-bottom-color: #e85d2f !important; }
+
+.tabCount {
+  background: #2a2a2a; color: #888; font-size: 10px;
+  padding: 1px 5px; border-radius: 8px;
+}
+
+.dropBanner {
+  background: rgba(232,93,47,0.12); border-bottom: 1px solid rgba(232,93,47,0.25);
+  padding: 10px 20px; font-size: 13px; color: #e85d2f; font-weight: 500;
+}
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px; padding: 16px 20px;
+}
+
+.itemCard {
+  background: #161616; border: 1px solid #222;
+  border-radius: 10px; padding: 12px 14px;
+  transition: border-color 0.15s;
+}
+.itemCard:hover { border-color: #333; }
+
+.itemCardTop { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+
+.itemName {
+  font-size: 13px; font-weight: 500; color: #e0e0e0;
+  margin-bottom: 4px; line-height: 1.3;
+}
+
+.favBtn {
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; padding: 0; line-height: 1; flex-shrink: 0;
+  opacity: 0.6; transition: opacity 0.15s;
+}
+.favBtn:hover { opacity: 1; }
+
+.dropList { padding: 16px 20px 32px; }
+.dropCount { font-size: 12px; color: #444; margin-bottom: 12px; }
+
+.dropRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; background: #161616; border: 1px solid #1f1f1f;
+  border-radius: 10px; margin-bottom: 6px; gap: 16px;
+}
+.dropRow:hover { border-color: #2a2a2a; }
+
+.dropLeft { min-width: 0; flex: 1; }
+.dropTime { font-size: 11px; color: #444; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+.dropName { font-size: 14px; font-weight: 500; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropSupply { font-size: 12px; color: #444; }
+.dropRight { text-align: right; flex-shrink: 0; }
+.dropDiff { font-size: 22px; font-weight: 700; color: #e85d2f; line-height: 1; }
+.dropPrev { font-size: 11px; color: #444; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.empty {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 60px 20px; gap: 8px;
+}
+.emptyTitle { font-size: 15px; font-weight: 500; color: #444; }
+.emptySub { font-size: 13px; color: #333; text-align: center; max-width: 320px; }
+
+@media (max-width: 640px) { .sidebar { display: none; } }
